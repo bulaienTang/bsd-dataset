@@ -276,7 +276,7 @@ class BSDDBuilder:
         splits = ['train', 'val', 'test']
         if split not in splits:
             raise ValueError(f'Split {split} not recognized\nMust be of {splits}')
-        X, X_meta, Y, Y_meta = self.load_XY(f'{split}_x.npz', f'{split}_y.npz')
+        X, X_meta, Y, Y_meta = self.load_XY(f'../era-eu-1.4-persiann-0.25/{split}_x.npy', f'../era-eu-1.4-persiann-0.25/{split}_y.npy')
         dataset = BSDD(X, X_meta, Y, Y_meta, transform, target_transform, self.device)
         return dataset
 
