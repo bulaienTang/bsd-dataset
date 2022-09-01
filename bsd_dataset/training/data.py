@@ -28,13 +28,13 @@ class MyDataset(Dataset):
         self.normalize = normalize
     
     def __getitem__(self, index):
-        if self.normalize is not None:
-            return self.normalize(self.x[index]), self.y[index], {"y_mask": self.mask[index]}
-        else:
+        # if self.normalize is not None:
+        #     return self.normalize(self.x[index]), self.y[index], {"y_mask": self.mask[index]}
+        # else:
             return self.x[index], self.y[index], {"y_mask": self.mask[index]}
 
     def __len__(self):
-        return self.x.shape[0]
+        return self.x.shape[1]
 
 def get_dataloaders(options):
     dataloadersList = []
