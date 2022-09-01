@@ -40,36 +40,37 @@ def get_dataloaders(options):
     dataloadersList = []
     
     normalize = None
-    for split in ["train", "val", "test"]:
 
-        if normalize is None:
-            unnormalized_dataset = MyDataset(options.data, split = split)
-            mean = tuple([torch.mean(unnormalized_dataset.x[:, i]) for i in range(unnormalized_dataset.x.shape[1])])
-            std = tuple([torch.std(unnormalized_dataset.x[:, i]) for i in range(unnormalized_dataset.x.shape[1])])
-            normalize = torchvision.transforms.Normalize(mean, std)
+    num_patches = 10
+    for patch in range(num_patches):
 
-        datasets = MyDataset(options.data, split = split, normalize=normalize)
+        dataloaders = {}
 
-        input_shape, target_shape = list(datasets[0][0][0].shape), list(datasets[0][0][1].shape) # 1, 15, 36; 80, 200
-
-        num_patches = datasets.x.shape[0]
-        for patch in range(num_patches):
-
-            dataloaders = {}
-            
-            dataset = datasets[patch]
+        for split in ["train", "val", "test"]:
 
             if(eval(f"options.no_{split}")):
                 dataloaders[split] = None
                 continue
+
+            if normalize is None:
+                unnormalized_dataset = MyDataset(options.data, split = split)
+                mean = tuple([torch.mean(unnormalized_dataset.x[:, i]) for i in range(unnormalized_dataset.x.shape[1])])
+                std = tuple([torch.std(unnormalized_dataset.x[:, i]) for i in range(unnormalized_dataset.x.shape[1])])
+                normalize = torchvision.transforms.Normalize(mean, std)
+
+            datasets = MyDataset(options.data, split = split, normalize=normalize)
+
+            input_shape, target_shape = list(datasets[0][0][0].shape), list(datasets[0][0][1].shape) # 1, 15, 36; 80, 200
                 
+            dataset = datasets[patch]
+
             sampler = DistributedSampler(dataset) if(options.distributed and split == "train") else None
             dataloader = DataLoader(dataset, batch_size = options.batch_size, num_workers = options.num_workers, pin_memory = (split == "train"), sampler = sampler, shuffle = (split == "train") and (sampler is None), drop_last = (split == "train"))
             dataloader.num_samples = options.batch_size * len(dataloader) if (split == "train") else len(dataset)
             dataloader.num_batches = len(dataloader)
             dataloaders[split] = dataloader
 
-            dataloadersList.append(dataloaders)
+        dataloadersList.append(dataloaders)
     
     return dataloadersList, input_shape, target_shape, num_patches
 
