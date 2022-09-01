@@ -49,7 +49,7 @@ def worker(rank, options, logger):
         dist.init_process_group(backend = options.distributed_backend, init_method = f"tcp://{options.address}:{options.port}", world_size = options.nprocs, rank = options.rank)
         options.batch_size = options.batch_size // options.nprocs
 
-    dataloaders, input_shape, target_shape = load_dataloaders(options)
+    dataloadersList, input_shape, target_shape, num_patches = load_dataloaders(options)
 
     model = load_model(model = options.model, input_shape = input_shape, target_shape = target_shape, model_config = options.model_config)
 
@@ -60,63 +60,65 @@ def worker(rank, options, logger):
         if(options.distributed):
             model = DDP(model, device_ids = [options.device_ids[options.rank]])
 
-    optimizer = None
-    scheduler = None
-    if(dataloaders["train"] is not None):        
-        optimizer = load_optimizer(model = model, lr = options.lr, beta1 = options.beta1, beta2 = options.beta2, eps = options.eps, weight_decay = options.weight_decay)
-        scheduler = load_scheduler(optimizer = optimizer, base_lr = options.lr, num_warmup_steps = options.num_warmup_steps, num_total_steps = dataloaders["train"].num_batches * options.epochs)
+    for patch in range(num_patches):
+        
+        optimizer = None
+        scheduler = None
+        if(dataloadersList[patch]["train"] is not None):        
+            optimizer = load_optimizer(model = model, lr = options.lr, beta1 = options.beta1, beta2 = options.beta2, eps = options.eps, weight_decay = options.weight_decay)
+            scheduler = load_scheduler(optimizer = optimizer, base_lr = options.lr, num_warmup_steps = options.num_warmup_steps, num_total_steps = dataloadersList[patch]["train"].num_batches * options.epochs)
 
-    start_epoch = 0
-    if(options.checkpoint is not None):
-        if(os.path.isfile(options.checkpoint)):
-            checkpoint = torch.load(options.checkpoint, map_location = options.device)
-            start_epoch = checkpoint["epoch"]
-            model_state_dict = checkpoint["model_state_dict"]
-            if(not options.distributed and next(iter(model_state_dict.items()))[0].startswith("module")):
-                model_state_dict = {key[len("module."):]: value for key, value in model_state_dict.items()}
-            model.load_state_dict(model_state_dict)
-            if(optimizer is not None): 
-                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            logging.info(f"Loaded checkpoint '{options.checkpoint}' (start epoch {checkpoint['epoch']})")
-        else:
-            logging.info(f"No checkpoint found at {options.checkpoint}")
+        start_epoch = 0
+        if(options.checkpoint is not None):
+            if(os.path.isfile(options.checkpoint)):
+                checkpoint = torch.load(options.checkpoint, map_location = options.device)
+                start_epoch = checkpoint["epoch"]
+                model_state_dict = checkpoint["model_state_dict"]
+                if(not options.distributed and next(iter(model_state_dict.items()))[0].startswith("module")):
+                    model_state_dict = {key[len("module."):]: value for key, value in model_state_dict.items()}
+                model.load_state_dict(model_state_dict)
+                if(optimizer is not None): 
+                    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                logging.info(f"Loaded checkpoint '{options.checkpoint}' (start epoch {checkpoint['epoch']})")
+            else:
+                logging.info(f"No checkpoint found at {options.checkpoint}")
 
-    if(options.wandb and options.master):
-        logging.debug("Starting wandb")
-        wandb.init(project = "climate-downscaling-benchmark", notes = options.notes, tags = [], config = vars(options))
-        wandb.run.name = options.name
-        wandb.save(os.path.join(options.log_dir_path, "params.txt"))
+        if(options.wandb and options.master):
+            logging.debug("Starting wandb")
+            wandb.init(project = "climate-downscaling-benchmark", notes = options.notes, tags = [], config = vars(options))
+            wandb.run.name = options.name
+            wandb.save(os.path.join(options.log_dir_path, "params.txt"))
 
-    evaluate(start_epoch, model, dataloaders, options)
+        evaluate(start_epoch, model, dataloadersList[patch], options)
 
-    if(dataloaders["train"] is not None):
-        options.checkpoints_dir_path = os.path.join(options.log_dir_path, "checkpoints")
-        os.makedirs(options.checkpoints_dir_path, exist_ok = True)
+        if(dataloadersList[patch]["train"] is not None):
+            options.checkpoints_dir_path = os.path.join(options.log_dir_path, "checkpoints")
+            os.makedirs(options.checkpoints_dir_path, exist_ok = True)
 
-        scaler = GradScaler()
+            scaler = GradScaler()
 
-        best_loss = np.inf
-        for epoch in range(start_epoch + 1, options.epochs + 1):
-            if(options.master): 
-                logging.info(f"Starting epoch {epoch}")
+            best_loss = np.inf
+            for epoch in range(start_epoch + 1, options.epochs + 1):
+                if(options.master): 
+                    logging.info(f"Starting epoch {epoch}")
 
-            start = time.time()
-            train(epoch, model, dataloaders, optimizer, scheduler, scaler, options)
-            end = time.time()
+                start = time.time()
+                train(epoch, model, dataloadersList[patch], optimizer, scheduler, scaler, options)
+                end = time.time()
 
-            if(options.master): 
-                logging.info(f"Finished epoch {epoch} in {end - start:.3f} seconds")
+                if(options.master): 
+                    logging.info(f"Finished epoch {epoch} in {end - start:.3f} seconds")
 
-            if epoch % options.eval_freq == 0:
-                metrics = evaluate(epoch, model, dataloaders, options)
+                if epoch % options.eval_freq == 0:
+                    metrics = evaluate(epoch, model, dataloadersList[patch], options)
 
-                if(options.master):
-                    checkpoint = {"epoch": epoch, "name": options.name, "model_state_dict": model.state_dict(), "optimizer_state_dict": optimizer.state_dict()}
-                    torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch_{epoch}.pt"))
-                    if("loss" in metrics):
-                        if(metrics["loss"] < best_loss):
-                            best_loss = metrics["loss"]
-                            torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch.best.pt"))
+                    if(options.master):
+                        checkpoint = {"epoch": epoch, "name": options.name, "model_state_dict": model.state_dict(), "optimizer_state_dict": optimizer.state_dict()}
+                        torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch_{epoch}.pt"))
+                        if("loss" in metrics):
+                            if(metrics["loss"] < best_loss):
+                                best_loss = metrics["loss"]
+                                torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch.best.pt"))
 
     if(options.distributed):
         dist.destroy_process_group()
