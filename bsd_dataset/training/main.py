@@ -93,7 +93,6 @@ def worker(rank, options, logger):
         evaluate(start_epoch, model, dataloaders, options)
 
         if(dataloaders["train"] is not None):
-            print("ooooooooooooooooooooooooooooooooooooooooooooooooooo=====================================")
             options.checkpoints_dir_path = os.path.join(options.log_dir_path, "checkpoints")
             os.makedirs(options.checkpoints_dir_path, exist_ok = True)
 

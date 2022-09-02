@@ -36,7 +36,7 @@ class MyDataset(Dataset):
             return self.x[index], self.y[index], {"y_mask": self.mask[index]}
 
     def __len__(self):
-        return self.x.shape[1]
+        return self.x.shape[0]
 
 def get_dataloaders(options):
     dataloadersList = []
