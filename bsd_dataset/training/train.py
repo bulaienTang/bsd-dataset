@@ -16,7 +16,7 @@ def train(epoch, model, dataloaders, optimizer, scheduler, scaler, options):
 
     start = time.time()
     for index, batch in enumerate(dataloader): 
-        print(f"index: {index}, batch_shape: {list(batch.shape)}, num_batches: {dataloader.num_batches}, epoch: {epoch}")
+        print(f"index: {index}, batch_shape: {len(batch)}, num_batches: {dataloader.num_batches}, epoch: {epoch}")
         step = dataloader.num_batches * (epoch - 1) + index
         scheduler(step)
 
@@ -35,7 +35,7 @@ def train(epoch, model, dataloaders, optimizer, scheduler, scaler, options):
 
         end = time.time()
 
-        
+
         if(options.master and (((index + 1) % (dataloader.num_batches // 10) == 0) or (index == dataloader.num_batches - 1))):
             logging.info(f"Train epoch: {epoch:02d} [{index + 1}/{dataloader.num_batches} ({100.0 * (index + 1) / dataloader.num_batches:.0f}%)]\tLoss: {loss.item():.6f}\tTime taken {end - start:.3f}\tLearning Rate: {optimizer.param_groups[0]['lr']:.9f}")
             
