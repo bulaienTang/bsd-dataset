@@ -28,10 +28,9 @@ def get_metrics(model, dataloader, prefix, options):
                     num_samples += 1
                     total_rmse += rmse(predictions[index], target[index], mask[index])
                     total_bias += bias(predictions[index], target[index], mask[index])
-                    total_pearsonr += pearsonr(predictions[index], target[index], mask[index])
-                    
-                    if math.isnan(total_pearsonr):
-                        print(torch.count_nonzero(target[index]), num_samples)
+                    if not math.isnan(pearsonr(predictions[index], target[index], mask[index])):
+                        total_pearsonr += pearsonr(predictions[index], target[index], mask[index])
+                    # the pearsonr could be nan for a particular patch since one of the target patch could be all 0, although the entire grid cannot be all 0
 
         total_rmse /= num_samples
         total_bias /= num_samples
@@ -40,8 +39,6 @@ def get_metrics(model, dataloader, prefix, options):
         metrics[f"{prefix}_rmse"] = total_rmse
         metrics[f"{prefix}_bias"] = total_bias
         metrics[f"{prefix}_pearson_r"] = total_pearsonr
-
-        # print(total_pearsonr, metrics[f"{prefix}_pearson_r"], prefix, num_samples)
 
     return metrics
 
