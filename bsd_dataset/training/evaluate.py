@@ -42,6 +42,8 @@ def get_metrics(model, dataloader, prefix, options):
         metrics[f"{prefix}_bias"] = total_bias
         metrics[f"{prefix}_pearson_r"] = total_pearsonr
 
+        print(metrics[f"{prefix}_pearson_r"], prefix, num_samples)
+
     return metrics
 
 def evaluate(epoch, model, dataloaders, options):
