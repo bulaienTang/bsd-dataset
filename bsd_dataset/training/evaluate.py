@@ -30,8 +30,8 @@ def get_metrics(model, dataloader, prefix, options):
                     total_bias += bias(predictions[index], target[index], mask[index])
                     total_pearsonr += pearsonr(predictions[index], target[index], mask[index])
                     
-                    if a==1:
-                        print(total_pearsonr, prefix, num_samples)
+                    if torch.isnan(total_pearsonr):
+                        print(predictions[index], target[index], mask[index], prefix, num_samples)
                         a=0
 
         total_rmse /= num_samples
@@ -42,7 +42,7 @@ def get_metrics(model, dataloader, prefix, options):
         metrics[f"{prefix}_bias"] = total_bias
         metrics[f"{prefix}_pearson_r"] = total_pearsonr
 
-        print(total_pearsonr, metrics[f"{prefix}_pearson_r"], prefix, num_samples)
+        # print(total_pearsonr, metrics[f"{prefix}_pearson_r"], prefix, num_samples)
 
     return metrics
 
