@@ -31,7 +31,7 @@ def get_metrics(model, dataloader, prefix, options):
                     total_pearsonr += pearsonr(predictions[index], target[index], mask[index])
                     
                     if a==1:
-                        print(total_pearsonr, predictions[index].shape,target[index].shape, mask[index].shape)
+                        print(total_pearsonr, prefix, len(context))
                         a=0
 
         total_rmse /= num_samples
