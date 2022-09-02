@@ -49,7 +49,8 @@ def worker(rank, options, logger):
         dist.init_process_group(backend = options.distributed_backend, init_method = f"tcp://{options.address}:{options.port}", world_size = options.nprocs, rank = options.rank)
         options.batch_size = options.batch_size // options.nprocs
 
-    dataloadersList, input_shape, target_shape, num_patches = load_dataloaders(options)
+    num_patches = 10
+    dataloadersList, input_shape, target_shape = load_dataloaders(options, num_patches)
 
     model = load_model(model = options.model, input_shape = input_shape, target_shape = target_shape, model_config = options.model_config)
 
@@ -60,9 +61,14 @@ def worker(rank, options, logger):
         if(options.distributed):
             model = DDP(model, device_ids = [options.device_ids[options.rank]])
 
+    # train ten patches separately and record the metrics for the last epochs of each patch
+    all_metrics = []
+
     for patch in range(num_patches):
         
+        # get one patch
         dataloaders = dataloadersList[patch]
+
         optimizer = None
         scheduler = None
         if(dataloaders["train"] is not None):        
@@ -90,6 +96,7 @@ def worker(rank, options, logger):
             wandb.run.name = options.name
             wandb.save(os.path.join(options.log_dir_path, "params.txt"))
 
+        # evaluate once before training
         evaluate(start_epoch, model, dataloaders, options)
 
         if(dataloaders["train"] is not None):
@@ -110,7 +117,8 @@ def worker(rank, options, logger):
                 if(options.master): 
                     logging.info(f"Finished epoch {epoch} in {end - start:.3f} seconds")
 
-                if epoch % options.eval_freq == 0:
+                # evaluate by frequency set, not the last epoch
+                if epoch % options.eval_freq == 0 & epoch != options.epochs:
                     metrics = evaluate(epoch, model, dataloaders, options)
 
                     if(options.master):
@@ -120,6 +128,38 @@ def worker(rank, options, logger):
                             if(metrics["loss"] < best_loss):
                                 best_loss = metrics["loss"]
                                 torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch.best.pt"))
+                # last epoch
+                elif epoch == options.epochs:
+                    metrics = evaluate(epoch, model, dataloaders, options)
+
+                    if(options.master):
+                        checkpoint = {"epoch": epoch, "name": options.name, "model_state_dict": model.state_dict(), "optimizer_state_dict": optimizer.state_dict()}
+                        torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch_{epoch}.pt"))
+                        if("loss" in metrics):
+                            if(metrics["loss"] < best_loss):
+                                best_loss = metrics["loss"]
+                                torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch.best.pt"))
+                    
+                    all_metrics.append(metrics)
+
+    ###################################################################
+    # final evaluation of combined prediction against original target #
+    ###################################################################
+    total_rmse = 0
+    total_bias = 0
+    total_pearson_r = 0
+    for metrics in all_metrics:
+        total_rmse += metrics["test_rmse"]
+        total_bias += metrics["test_bias"]
+        total_pearson_r += metrics["test_pearson_r"]
+    
+    logging.info(f"total_test_rmse: {total_rmse}")
+    logging.info(f"total_test_bias: {total_bias}")
+    logging.info(f"total_test_pearson_r: {total_pearson_r}")
+
+    ###################################################################
+    # final evaluation of combined prediction against original target #
+    ###################################################################
 
     if(options.distributed):
         dist.destroy_process_group()

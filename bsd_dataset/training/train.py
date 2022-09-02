@@ -15,8 +15,7 @@ def train(epoch, model, dataloaders, optimizer, scheduler, scaler, options):
     model.train()
 
     start = time.time()
-    for index, batch in enumerate(dataloader): 
-        print(f"index: {index}, batch_shape: {len(batch)}, num_batches: {dataloader.num_batches}, epoch: {epoch}")
+    for index, batch in enumerate(dataloader): # batch size 16, total 10220 training instances, 638 batches, index corresponde to the batches 0-637
         step = dataloader.num_batches * (epoch - 1) + index
         scheduler(step)
 
@@ -25,7 +24,9 @@ def train(epoch, model, dataloaders, optimizer, scheduler, scaler, options):
         context, target, mask = batch[0].to(options.device), batch[1].to(options.device), batch[2]["y_mask"].to(options.device)
         target = target.nan_to_num()
         predictions = model(context, target = target)
-        print(f"context_shape: {context.shape}, target_shape: {target.shape}, predictions_shape: {predictions.shape}")
+        # context_shape: torch.Size([16, 1, 3, 18]), 
+        # target_shape: torch.Size([16, 16, 100]), 
+        # predictions_shape: torch.Size([16, 16, 100])
 
         with autocast():
             loss = ((torch.square(predictions - target) * (1 - mask.float())).sum([1, 2]) / ((1 - mask.float()).sum([1, 2]) + 1e-8)).mean()
