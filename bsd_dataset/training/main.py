@@ -118,7 +118,7 @@ def worker(rank, options, logger):
                     logging.info(f"Finished epoch {epoch} in {end - start:.3f} seconds")
 
                 # evaluate by frequency set, not the last epoch
-                if epoch % options.eval_freq == 0 & epoch != options.epochs:
+                if epoch % options.eval_freq == 0 and epoch != options.epochs:
                     metrics = evaluate(epoch, model, dataloaders, options)
 
                     if(options.master):
