@@ -28,7 +28,10 @@ def get_metrics(model, dataloader, prefix, options):
                     total_rmse += rmse(predictions[index], target[index], mask[index])
                     total_bias += bias(predictions[index], target[index], mask[index])
                     total_pearsonr += pearsonr(predictions[index], target[index], mask[index])
-                    print(predictions[index],target[index], mask[index])
+                    a = 1
+                    if a==1:
+                        print(predictions[index],target[index], mask[index])
+                        a=0
 
         total_rmse /= num_samples
         total_bias /= num_samples
