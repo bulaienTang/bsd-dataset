@@ -5,6 +5,7 @@ import torch.nn as nn
 from tqdm import tqdm    
 from torchvision.transforms import GaussianBlur
 from bsd_dataset.common.metrics import rmse, bias, pearsonr
+import math
 
 def get_metrics(model, dataloader, prefix, options):
     metrics = {}
@@ -30,7 +31,7 @@ def get_metrics(model, dataloader, prefix, options):
                     total_bias += bias(predictions[index], target[index], mask[index])
                     total_pearsonr += pearsonr(predictions[index], target[index], mask[index])
                     
-                    if torch.isnan(total_pearsonr):
+                    if math.isnan(total_pearsonr):
                         print(predictions[index], target[index], mask[index], prefix, num_samples)
                         a=0
 
