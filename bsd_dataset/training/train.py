@@ -16,6 +16,7 @@ def train(epoch, model, dataloaders, optimizer, scheduler, scaler, options):
 
     start = time.time()
     for index, batch in enumerate(dataloader): 
+        print(f"index: {index}, batch_shape: {list(batch.shape)}, num_batches: {dataloader.num_batches}, epoch: {epoch}")
         step = dataloader.num_batches * (epoch - 1) + index
         scheduler(step)
 
@@ -24,6 +25,7 @@ def train(epoch, model, dataloaders, optimizer, scheduler, scaler, options):
         context, target, mask = batch[0].to(options.device), batch[1].to(options.device), batch[2]["y_mask"].to(options.device)
         target = target.nan_to_num()
         predictions = model(context, target = target)
+        print(f"context_shape: {context.shape}, target_shape: {target.shape}, predictions_shape: {predictions.shape}")
 
         with autocast():
             loss = ((torch.square(predictions - target) * (1 - mask.float())).sum([1, 2]) / ((1 - mask.float()).sum([1, 2]) + 1e-8)).mean()
@@ -32,6 +34,8 @@ def train(epoch, model, dataloaders, optimizer, scheduler, scaler, options):
         scaler.update()
 
         end = time.time()
+
+        
         if(options.master and (((index + 1) % (dataloader.num_batches // 10) == 0) or (index == dataloader.num_batches - 1))):
             logging.info(f"Train epoch: {epoch:02d} [{index + 1}/{dataloader.num_batches} ({100.0 * (index + 1) / dataloader.num_batches:.0f}%)]\tLoss: {loss.item():.6f}\tTime taken {end - start:.3f}\tLearning Rate: {optimizer.param_groups[0]['lr']:.9f}")
             
