@@ -23,7 +23,7 @@ def get_metrics(model, dataloader, prefix, options):
             context, target, mask = batch[0].to(options.device), batch[1].to(options.device), batch[2]["y_mask"].to(options.device)
             target = target.nan_to_num()
             predictions = model(context)
-            for index in range(len(context)):
+            for index in range(len(context)): # len(context) = 16
                 if (~mask[index]).sum() != 0:
                     num_samples += 1
                     total_rmse += rmse(predictions[index], target[index], mask[index])
@@ -31,7 +31,7 @@ def get_metrics(model, dataloader, prefix, options):
                     total_pearsonr += pearsonr(predictions[index], target[index], mask[index])
                     
                     if a==1:
-                        print(total_pearsonr, prefix, len(context))
+                        print(total_pearsonr, prefix, (~mask[index]).sum())
                         a=0
 
         total_rmse /= num_samples
