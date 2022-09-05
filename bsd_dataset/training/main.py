@@ -65,7 +65,7 @@ def worker(rank, options, logger):
     scheduler = None
     if(dataloadersList[0]["train"] is not None):        
         optimizer = load_optimizer(model = model, lr = options.lr, beta1 = options.beta1, beta2 = options.beta2, eps = options.eps, weight_decay = options.weight_decay)
-        scheduler = load_scheduler(optimizer = optimizer, base_lr = options.lr, num_warmup_steps = options.num_warmup_steps, num_total_steps = dataloaders["train"].num_batches * options.epochs)
+        scheduler = load_scheduler(optimizer = optimizer, base_lr = options.lr, num_warmup_steps = options.num_warmup_steps, num_total_steps = dataloadersList[0]["train"].num_batches * options.epochs)
 
     # train ten patches separately and record the metrics for the last epochs of each patch
     all_metrics = []
