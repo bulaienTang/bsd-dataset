@@ -61,6 +61,12 @@ def worker(rank, options, logger):
         if(options.distributed):
             model = DDP(model, device_ids = [options.device_ids[options.rank]])
 
+    optimizer = None
+    scheduler = None
+    if(dataloadersList[0]["train"] is not None):        
+        optimizer = load_optimizer(model = model, lr = options.lr, beta1 = options.beta1, beta2 = options.beta2, eps = options.eps, weight_decay = options.weight_decay)
+        scheduler = load_scheduler(optimizer = optimizer, base_lr = options.lr, num_warmup_steps = options.num_warmup_steps, num_total_steps = dataloaders["train"].num_batches * options.epochs)
+
     # train ten patches separately and record the metrics for the last epochs of each patch
     all_metrics = []
 
@@ -68,12 +74,6 @@ def worker(rank, options, logger):
         
         # get one patch
         dataloaders = dataloadersList[patch]
-
-        optimizer = None
-        scheduler = None
-        if(dataloaders["train"] is not None):        
-            optimizer = load_optimizer(model = model, lr = options.lr, beta1 = options.beta1, beta2 = options.beta2, eps = options.eps, weight_decay = options.weight_decay)
-            scheduler = load_scheduler(optimizer = optimizer, base_lr = options.lr, num_warmup_steps = options.num_warmup_steps, num_total_steps = dataloaders["train"].num_batches * options.epochs)
 
         start_epoch = 0
         if(options.checkpoint is not None):
@@ -133,6 +133,7 @@ def worker(rank, options, logger):
                     metrics = evaluate(epoch, model, dataloaders, options)
 
                     if(options.master):
+                        # saving checkpoint for this epoch
                         checkpoint = {"epoch": epoch, "name": options.name, "model_state_dict": model.state_dict(), "optimizer_state_dict": optimizer.state_dict()}
                         torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch_{epoch}.pt"))
                         if("loss" in metrics):
@@ -153,9 +154,9 @@ def worker(rank, options, logger):
         total_bias += metrics["test_bias"]
         total_pearson_r += metrics["test_pearson_r"]
     
-    logging.info(f"total_test_rmse: {total_rmse}")
-    logging.info(f"total_test_bias: {total_bias}")
-    logging.info(f"total_test_pearson_r: {total_pearson_r}")
+    logging.info(f"total_test_rmse: {total_rmse/10}")
+    logging.info(f"total_test_bias: {total_bias/10}")
+    logging.info(f"total_test_pearson_r: {total_pearson_r/10}")
 
     ###################################################################
     # final evaluation of combined prediction against original target #
