@@ -67,48 +67,49 @@ def worker(rank, options, logger):
         optimizer = load_optimizer(model = model, lr = options.lr, beta1 = options.beta1, beta2 = options.beta2, eps = options.eps, weight_decay = options.weight_decay)
         scheduler = load_scheduler(optimizer = optimizer, base_lr = options.lr, num_warmup_steps = options.num_warmup_steps, num_total_steps = dataloadersList[0]["train"].num_batches * options.epochs)
 
-    # train ten patches separately and record the metrics for the last epochs of each patch
+    # train ten patches sequentially and record the metrics for the last epochs of each patch
     all_metrics = []
 
-    for patch in range(num_patches):
+    start_epoch = 0
+    if(options.checkpoint is not None):
+        if(os.path.isfile(options.checkpoint)):
+            checkpoint = torch.load(options.checkpoint, map_location = options.device)
+            start_epoch = checkpoint["epoch"]
+            model_state_dict = checkpoint["model_state_dict"]
+            if(not options.distributed and next(iter(model_state_dict.items()))[0].startswith("module")):
+                model_state_dict = {key[len("module."):]: value for key, value in model_state_dict.items()}
+            model.load_state_dict(model_state_dict)
+            if(optimizer is not None): 
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            logging.info(f"Loaded checkpoint '{options.checkpoint}' (start epoch {checkpoint['epoch']})")
+        else:
+            logging.info(f"No checkpoint found at {options.checkpoint}")
+
+    if(options.wandb and options.master):
+        logging.debug("Starting wandb")
+        wandb.init(project = "climate-downscaling-benchmark", notes = options.notes, tags = [], config = vars(options))
+        wandb.run.name = options.name
+        wandb.save(os.path.join(options.log_dir_path, "params.txt"))
+
+    # # evaluate once before training
+    # evaluate(start_epoch, model, dataloaders, options)
+
+    if(dataloadersList[0]["train"] is not None):
+        options.checkpoints_dir_path = os.path.join(options.log_dir_path, "checkpoints")
+        os.makedirs(options.checkpoints_dir_path, exist_ok = True)
+
+        scaler = GradScaler()
+
+        best_loss = np.inf
+
+        for epoch in range(start_epoch + 1, options.epochs + 1):
+            if(options.master): 
+                logging.info(f"Starting epoch {epoch}")
+
+            for patch in range(num_patches):
         
-        # get one patch
-        dataloaders = dataloadersList[patch]
-
-        start_epoch = 0
-        if(options.checkpoint is not None):
-            if(os.path.isfile(options.checkpoint)):
-                checkpoint = torch.load(options.checkpoint, map_location = options.device)
-                start_epoch = checkpoint["epoch"]
-                model_state_dict = checkpoint["model_state_dict"]
-                if(not options.distributed and next(iter(model_state_dict.items()))[0].startswith("module")):
-                    model_state_dict = {key[len("module."):]: value for key, value in model_state_dict.items()}
-                model.load_state_dict(model_state_dict)
-                if(optimizer is not None): 
-                    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-                logging.info(f"Loaded checkpoint '{options.checkpoint}' (start epoch {checkpoint['epoch']})")
-            else:
-                logging.info(f"No checkpoint found at {options.checkpoint}")
-
-        if(options.wandb and options.master):
-            logging.debug("Starting wandb")
-            wandb.init(project = "climate-downscaling-benchmark", notes = options.notes, tags = [], config = vars(options))
-            wandb.run.name = options.name
-            wandb.save(os.path.join(options.log_dir_path, "params.txt"))
-
-        # evaluate once before training
-        evaluate(start_epoch, model, dataloaders, options)
-
-        if(dataloaders["train"] is not None):
-            options.checkpoints_dir_path = os.path.join(options.log_dir_path, "checkpoints")
-            os.makedirs(options.checkpoints_dir_path, exist_ok = True)
-
-            scaler = GradScaler()
-
-            best_loss = np.inf
-            for epoch in range(start_epoch + 1, options.epochs + 1):
-                if(options.master): 
-                    logging.info(f"Starting epoch {epoch}")
+                # get one patch
+                dataloaders = dataloadersList[patch]
 
                 start = time.time()
                 train(epoch, model, dataloaders, optimizer, scheduler, scaler, options)
