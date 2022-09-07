@@ -40,9 +40,7 @@ def get_metrics(model, num_patches, dataloader, prefix, options):
                 prediction = model(patch).unsqueeze(0).to(options.device)
                 predictions = torch.cat((predictions, prediction),0).to(options.device) 
                 # 10, 16, 16, 100
-            
-            print(predictions.shape)
-            exit()
+                
             # transform the predictions into the format of the target output
             predictions = predictions.unsqueeze(0).permute(0, 2, 3, 4, 1) 
             #1, 10, 16, 16, 100 => 1, 16, 16, 100, 10
