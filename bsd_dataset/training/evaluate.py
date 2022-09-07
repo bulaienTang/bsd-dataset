@@ -38,7 +38,7 @@ def get_metrics(model, num_patches, dataloader, prefix, options):
 
             for patch in o:
                 prediction = model(patch).to(options.device)
-                predictions = torch.cat((predictions, prediction),1).to(options.device) 
+                predictions = torch.cat((predictions, prediction),0).to(options.device) 
                 # 10, 16, 16, 100
             
             print(predictions.shape)
