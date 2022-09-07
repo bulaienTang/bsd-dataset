@@ -44,7 +44,7 @@ def get_metrics(model, num_patches, dataloader, prefix, options):
             # transform the predictions into the format of the target output
             predictions = predictions.unsqueeze(0).permute(0, 2, 3, 4, 1) 
             #1, 10, 16, 16, 100 => 1, 16, 16, 100, 10
-            predictions = predictions.view(1, len(context)*target.shape[1]*target.shape[2], num_patches) # 1, 16*16*100, 10
+            predictions = predictions.view(1, len(context)*predictions.shape[2]*predictions.shape[3], num_patches) # 1, 16*16*100, 10
             predictions = F.fold(predictions, output_size=(80, 200), kernel_size=(16,100), stride=(16,100)).squeeze(0) # 16, 80, 200
 
             for index in range(len(context)): # len(context) = 16
