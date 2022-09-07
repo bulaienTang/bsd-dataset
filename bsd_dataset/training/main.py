@@ -90,7 +90,7 @@ def worker(rank, options, logger):
         wandb.save(os.path.join(options.log_dir_path, "params.txt"))
 
     # evaluate once before training
-    evaluate(epoch, model, valTestDataloaders, num_patches, options)
+    evaluate(start_epoch, model, valTestDataloaders, num_patches, options)
 
     if(trainDataloadersList[0]["train"] is not None):
         options.checkpoints_dir_path = os.path.join(options.log_dir_path, "checkpoints")
