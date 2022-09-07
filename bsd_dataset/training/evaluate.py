@@ -24,13 +24,14 @@ def get_metrics(model, num_patches, dataloader, prefix, options):
         for batch in tqdm(dataloader):
             # context_shape: torch.Size([16, 1, 15, 36]), 
             # target_shape: torch.Size([16, 80, 200]), 
-            # prediction_shape: torch.Size([16, 16, 100])
-            # list of predictions: torch.Size([10, 16, 16, 100])
-            # predictions_shape: torch.Size([16, 80, 200])
+            # patch_prediction_shape: torch.Size([16, 16, 100])
+            # predictions: torch.Size([10, 16, 16, 100])
+            # predictions_folded: torch.Size([16, 80, 200])
             context, target, mask = batch[0].to(options.device), batch[1].to(options.device), batch[2]["y_mask"].to(options.device)
             target = target.nan_to_num()
             predictions = [] 
 
+            # split the test/val x into ten patches, run through the model and concatenate the result predictions
             o = F.unfold(context, kernel_size=(3,18), stride=(3,18))
             o = o.view(context.shape[0], context.shape[1], 3, 18, num_patches) # 16, 1, 3, 18, 10
             o = o.permute(4, 0, 1, 2, 3) # 10, 16, 1, 3, 18
@@ -39,23 +40,19 @@ def get_metrics(model, num_patches, dataloader, prefix, options):
                 prediction = model(patch)
                 predictions.append(prediction) # 10, 16, 16, 100
             
+            # transform the predictions into the format of the target output
             predictions = predictions.unsqueeze(0).permute(0, 2, 3, 4, 1) 
             #1, 10, 16, 16, 100 => 1, 16, 16, 100, 10
-            # predictions = predictions.view(1, predictions)
-            
-        
-            # self.y = self.y.unsqueeze(0)  # 1, 10220, 80, 200
-            # u = F.unfold(self.y, kernel_size=(16,100), stride=(16,100)) # 
-            # u = u.view(1, self.y.shape[1], 16, 100, num_patches) # 1, 10220, 16, 100, 10
-            # u = u.permute(0, 4, 1, 2, 3).squeeze(0) # 1, 10, 10220, 16, 100
+            predictions = predictions.view(1, len(context)*target.shape(1)*target.shape(2), num_patches) # 1, 16*16*100, 10
+            predictions = F.fold(predictions, output_size=(80, 200), kernel_size=(16,100), stride=(16,100)).squeeze(0) # 16, 80, 200
 
             for index in range(len(context)): # len(context) = 16
                 if (~mask[index]).sum() != 0:
                     num_samples += 1
                     total_rmse += rmse(predictions[index], target[index], mask[index])
                     total_bias += bias(predictions[index], target[index], mask[index])
-                    if not math.isnan(pearsonr(predictions[index], target[index], mask[index])):
-                        total_pearsonr += pearsonr(predictions[index], target[index], mask[index])
+                    # if not math.isnan(pearsonr(predictions[index], target[index], mask[index])):
+                    total_pearsonr += pearsonr(predictions[index], target[index], mask[index])
                     # the pearsonr could be nan for a particular patch since one of the target patch could be all 0, although the entire grid cannot be all 0
 
         total_rmse /= num_samples
