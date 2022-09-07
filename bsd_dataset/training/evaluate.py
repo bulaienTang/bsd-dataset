@@ -29,7 +29,7 @@ def get_metrics(model, num_patches, dataloader, prefix, options):
             # predictions_folded: torch.Size([16, 80, 200])
             context, target, mask = batch[0].to(options.device), batch[1].to(options.device), batch[2]["y_mask"].to(options.device)
             target = target.nan_to_num()
-            predictions = [] 
+            predictions = torch.Tensor(()) 
 
             # split the test/val x into ten patches, run through the model and concatenate the result predictions
             o = F.unfold(context, kernel_size=(3,18), stride=(3,18))
@@ -38,9 +38,10 @@ def get_metrics(model, num_patches, dataloader, prefix, options):
 
             for patch in o:
                 prediction = model(patch)
-                predictions.append(prediction) # 10, 16, 16, 100
+                predictions = torch.cat((predictions, prediction),1) 
+                # 10, 16, 16, 100
             
-            predictions = torch.Tensor(predictions)
+            print(predictions.shape)
 
             # transform the predictions into the format of the target output
             predictions = predictions.unsqueeze(0).permute(0, 2, 3, 4, 1) 
