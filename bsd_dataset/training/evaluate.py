@@ -37,7 +37,7 @@ def get_metrics(model, num_patches, dataloader, prefix, options):
             o = o.permute(4, 0, 1, 2, 3) # 10, 16, 1, 3, 18
 
             for patch in o:
-                prediction = model(patch)
+                prediction = model(patch.cuda())
                 predictions = torch.cat((predictions, prediction),1) 
                 # 10, 16, 16, 100
             
