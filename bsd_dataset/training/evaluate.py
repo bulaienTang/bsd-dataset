@@ -1,13 +1,15 @@
+from bsd_dataset.training import data
 import wandb
 import torch
 import logging
 import torch.nn as nn
+import torch.nn.functional as F
 from tqdm import tqdm    
 from torchvision.transforms import GaussianBlur
 from bsd_dataset.common.metrics import rmse, bias, pearsonr
 import math
 
-def get_metrics(model, dataloader, prefix, options):
+def get_metrics(model, num_patches, dataloader, prefix, options):
     metrics = {}
 
     model.eval()
@@ -20,9 +22,33 @@ def get_metrics(model, dataloader, prefix, options):
 
     with torch.no_grad():
         for batch in tqdm(dataloader):
+            # context_shape: torch.Size([16, 1, 15, 36]), 
+            # target_shape: torch.Size([16, 80, 200]), 
+            # prediction_shape: torch.Size([16, 16, 100])
+            # list of predictions: torch.Size([10, 16, 16, 100])
+            # predictions_shape: torch.Size([16, 80, 200])
             context, target, mask = batch[0].to(options.device), batch[1].to(options.device), batch[2]["y_mask"].to(options.device)
             target = target.nan_to_num()
-            predictions = model(context)
+            predictions = [] 
+
+            o = F.unfold(context, kernel_size=(3,18), stride=(3,18))
+            o = o.view(context.shape[0], context.shape[1], 3, 18, num_patches) # 16, 1, 3, 18, 10
+            o = o.permute(4, 0, 1, 2, 3) # 10, 16, 1, 3, 18
+
+            for patch in o:
+                prediction = model(patch)
+                predictions.append(prediction) # 10, 16, 16, 100
+            
+            predictions = predictions.unsqueeze(0).permute(0, 2, 3, 4, 1) 
+            #1, 10, 16, 16, 100 => 1, 16, 16, 100, 10
+            # predictions = predictions.view(1, predictions)
+            
+        
+            # self.y = self.y.unsqueeze(0)  # 1, 10220, 80, 200
+            # u = F.unfold(self.y, kernel_size=(16,100), stride=(16,100)) # 
+            # u = u.view(1, self.y.shape[1], 16, 100, num_patches) # 1, 10220, 16, 100, 10
+            # u = u.permute(0, 4, 1, 2, 3).squeeze(0) # 1, 10, 10220, 16, 100
+
             for index in range(len(context)): # len(context) = 16
                 if (~mask[index]).sum() != 0:
                     num_samples += 1
@@ -42,18 +68,18 @@ def get_metrics(model, dataloader, prefix, options):
 
     return metrics
 
-def evaluate(epoch, model, dataloaders, options):
+def evaluate(epoch, model, valTestDataloaders, num_patches, options):
     metrics = {}
-    
+
     if(options.master):
-        if(dataloaders["val"] is not None or dataloaders["test"] is not None):
+        if(valTestDataloaders["val"] is not None or valTestDataloaders["test"] is not None):
             logging.info(f"Starting epoch {epoch} evaluation")
 
-        if(dataloaders["val"] is not None): 
-            metrics.update(get_metrics(model, dataloaders["val"], "val", options))
+        if(valTestDataloaders["val"] is not None): 
+            metrics.update(get_metrics(model, num_patches, valTestDataloaders["val"], "val", options))
             
-        if(dataloaders["test"] is not None): 
-            metrics.update(get_metrics(model, dataloaders["test"], "test", options))
+        if(valTestDataloaders["test"] is not None): 
+            metrics.update(get_metrics(model, num_patches, valTestDataloaders["test"], "test", options))
         
         if(metrics):
             logging.info(f"Epoch {epoch} evaluation results")

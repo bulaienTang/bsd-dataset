@@ -50,7 +50,7 @@ def worker(rank, options, logger):
         options.batch_size = options.batch_size // options.nprocs
 
     num_patches = 10
-    dataloadersList, input_shape, target_shape = load_dataloaders(options, num_patches)
+    trainDataloadersList, valTestDataloaders, input_shape, target_shape = load_dataloaders(options, num_patches)
 
     model = load_model(model = options.model, input_shape = input_shape, target_shape = target_shape, model_config = options.model_config)
 
@@ -63,12 +63,10 @@ def worker(rank, options, logger):
 
     optimizer = None
     scheduler = None
-    if(dataloadersList[0]["train"] is not None):        
+    if(trainDataloadersList[0]["train"] is not None):        
         optimizer = load_optimizer(model = model, lr = options.lr, beta1 = options.beta1, beta2 = options.beta2, eps = options.eps, weight_decay = options.weight_decay)
-        scheduler = load_scheduler(optimizer = optimizer, base_lr = options.lr, num_warmup_steps = options.num_warmup_steps, num_total_steps = dataloadersList[0]["train"].num_batches * options.epochs)
+        scheduler = load_scheduler(optimizer = optimizer, base_lr = options.lr, num_warmup_steps = options.num_warmup_steps, num_total_steps = trainDataloadersList[0]["train"].num_batches * options.epochs)
 
-    # train ten patches sequentially and record the metrics for the last epochs of each patch
-    all_metrics = []
 
     start_epoch = 0
     if(options.checkpoint is not None):
@@ -94,7 +92,7 @@ def worker(rank, options, logger):
     # # evaluate once before training
     # evaluate(start_epoch, model, dataloaders, options)
 
-    if(dataloadersList[0]["train"] is not None):
+    if(trainDataloadersList[0]["train"] is not None):
         options.checkpoints_dir_path = os.path.join(options.log_dir_path, "checkpoints")
         os.makedirs(options.checkpoints_dir_path, exist_ok = True)
 
@@ -103,65 +101,52 @@ def worker(rank, options, logger):
         best_loss = np.inf
 
         for epoch in range(start_epoch + 1, options.epochs + 1):
-            if(options.master): 
-                logging.info(f"Starting epoch {epoch}")
 
             for patch in range(num_patches):
+
+                if(options.master): 
+                    logging.info(f"Starting epoch {epoch}, patch {patch}")
         
                 # get one patch
-                dataloaders = dataloadersList[patch]
+                dataloaders = trainDataloadersList[patch]
 
                 start = time.time()
                 train(epoch, model, dataloaders, optimizer, scheduler, scaler, options)
                 end = time.time()
 
                 if(options.master): 
-                    logging.info(f"Finished epoch {epoch} in {end - start:.3f} seconds")
+                    logging.info(f"Finished epoch {epoch}, patch {patch} in {end - start:.3f} seconds")
 
-                # evaluate by frequency set, not the last epoch
-                if epoch % options.eval_freq == 0 and epoch != options.epochs:
-                    metrics = evaluate(epoch, model, dataloaders, options)
+            # evaluate by frequency set
+            if epoch % options.eval_freq == 0:
+                metrics = evaluate(epoch, model, valTestDataloaders, num_patches, options)
 
-                    if(options.master):
-                        checkpoint = {"epoch": epoch, "name": options.name, "model_state_dict": model.state_dict(), "optimizer_state_dict": optimizer.state_dict()}
-                        torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch_{epoch}.pt"))
-                        if("loss" in metrics):
-                            if(metrics["loss"] < best_loss):
-                                best_loss = metrics["loss"]
-                                torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch.best.pt"))
-                # last epoch
-                elif epoch == options.epochs:
-                    metrics = evaluate(epoch, model, dataloaders, options)
+                if(options.master):
+                    checkpoint = {"epoch": epoch, "name": options.name, "model_state_dict": model.state_dict(), "optimizer_state_dict": optimizer.state_dict()}
+                    torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch_{epoch}.pt"))
+                    if("loss" in metrics):
+                        if(metrics["loss"] < best_loss):
+                            best_loss = metrics["loss"]
+                            torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch.best.pt"))
 
-                    if(options.master):
-                        # saving checkpoint for this epoch
-                        checkpoint = {"epoch": epoch, "name": options.name, "model_state_dict": model.state_dict(), "optimizer_state_dict": optimizer.state_dict()}
-                        torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch_{epoch}.pt"))
-                        if("loss" in metrics):
-                            if(metrics["loss"] < best_loss):
-                                best_loss = metrics["loss"]
-                                torch.save(checkpoint, os.path.join(options.checkpoints_dir_path, f"epoch.best.pt"))
-                    
-                    all_metrics.append(metrics)
-
-    ###################################################################
-    # final evaluation of combined prediction against original target #
-    ###################################################################
-    total_rmse = 0
-    total_bias = 0
-    total_pearson_r = 0
-    for metrics in all_metrics:
-        total_rmse += metrics["test_rmse"]
-        total_bias += metrics["test_bias"]
-        total_pearson_r += metrics["test_pearson_r"]
+    # ###################################################################
+    # # final evaluation of combined prediction against original target #
+    # ###################################################################
+    # total_rmse = 0
+    # total_bias = 0
+    # total_pearson_r = 0
+    # for metrics in all_metrics:
+    #     total_rmse += metrics["test_rmse"]
+    #     total_bias += metrics["test_bias"]
+    #     total_pearson_r += metrics["test_pearson_r"]
     
-    logging.info(f"total_test_rmse: {total_rmse/10}")
-    logging.info(f"total_test_bias: {total_bias/10}")
-    logging.info(f"total_test_pearson_r: {total_pearson_r/10}")
+    # logging.info(f"total_test_rmse: {total_rmse/10}")
+    # logging.info(f"total_test_bias: {total_bias/10}")
+    # logging.info(f"total_test_pearson_r: {total_pearson_r/10}")
 
-    ###################################################################
-    # final evaluation of combined prediction against original target #
-    ###################################################################
+    # ###################################################################
+    # # final evaluation of combined prediction against original target #
+    # ###################################################################
 
     if(options.distributed):
         dist.destroy_process_group()
