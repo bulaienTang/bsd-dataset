@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from tqdm import tqdm    
 from torchvision.transforms import GaussianBlur
 from bsd_dataset.common.metrics import rmse, bias, pearsonr
-import math
+# import math
 
 def get_metrics(model, num_patches, dataloader, prefix, options):
     metrics = {}
