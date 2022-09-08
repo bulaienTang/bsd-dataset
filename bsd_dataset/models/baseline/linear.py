@@ -12,7 +12,9 @@ class linearRegression(nn.Module):
         super(linearRegression, self).__init__()
         self.input_shape = input_shape
         self.target_shape = target_shape
-        self.linear = nn.Linear(self.input_shape[1], self.target_shape[2])
+
+        print(input_shape, target_shape)
+        self.linear = nn.Linear(self.input_shape[1], self.target_shape[1])
 
     def forward(self, x):
         x = self.linear(x)
