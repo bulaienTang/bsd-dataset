@@ -12,7 +12,7 @@ class linearRegression(nn.Module):
         #[1, 3, 18] [16, 100]
         super(linearRegression, self).__init__()
         self.w = torch.randn(size = (input_shape[1]*input_shape[2], target_shape[1]*target_shape[2]))
-        self.b = torch.randn(size = (target_shape[1]*target_shape[2],1))
+        self.b = torch.randn(size = (target_shape[0]*target_shape[1],1))
         self.input_shape = input_shape
         self.target_shape = target_shape
         
