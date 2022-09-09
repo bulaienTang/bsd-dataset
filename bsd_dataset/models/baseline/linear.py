@@ -20,6 +20,7 @@ class linearRegression(nn.Module):
 
     def forward(self, x):
         x = x.squeeze(1)
+        print(x.shape)
         x = x.view(1, x.shape[0] * x.shape[1])
         pred = x @ self.w + self.b
         pred = pred.view(self.target_shape[0], self.target_shape[1])
